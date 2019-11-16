@@ -18,7 +18,7 @@ def ssh_connect_with_retries(host, retries=3, timeout=30):
         try:
             ssh_client = paramiko.client.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.client.WarningPolicy())
-            ssh_client.connect(host, username='ubuntu', timeout=timeout, pkey = tornado.options.options.ssh_key_file)
+            ssh_client.connect(host, username='ubuntu', timeout=timeout, pkey=paramiko.RSAKey.from_private_key_file(tornado.options.options.ssh_key_file))
             return ssh_client
         except (socket.error, paramiko.ssh_exception.SSHException):
             if i == retries - 1:
