@@ -12,14 +12,14 @@ import paramiko.client
 import paramiko.ssh_exception
 import tornado.options
 
-k = paramiko.RSAKey.from_private_key_file(tornado.options.options.ssh_key_file)
+ssh_key_file = None
 
 def ssh_connect_with_retries(host, retries=3, timeout=30):
     for i in range(retries):
         try:
             ssh_client = paramiko.client.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.client.WarningPolicy())
-            ssh_client.connect(host, username='ubuntu', timeout=timeout, pkey = k)
+            ssh_client.connect(host, username='ubuntu', timeout=timeout, pkey = ssh_key_file)
             return ssh_client
         except (socket.error, paramiko.ssh_exception.SSHException):
             if i == retries - 1:
@@ -305,6 +305,9 @@ if __name__ == '__main__':
     tornado.options.define('subnet_id', type=str, help="Subnet id to launch the machines into")
 
     tornado.options.parse_command_line()
+
+    global ssh_key_file
+    ssh_key_file = tornado.options.options.ssh_key_file
 
     logging.getLogger('paramiko').setLevel(logging.WARNING)
     warnings.simplefilter('ignore')
