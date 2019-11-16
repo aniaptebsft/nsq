@@ -77,6 +77,7 @@ def _bootstrap(addr):
     ssh_client = ssh_connect_with_retries(addr)
     for cmd in [
             'wget https://dl.google.com/go/go1.12.13.linux-amd64.tar.gz',
+            'mkdir .local',
             'tar -C .local -xzf go1.12.13.linux-amd64.tar.gz',
             'mkdir -p go/src/github.com/nsqio',
             'cd go/src/github.com/nsqio && git clone https://github.com/nsqio/nsq',
