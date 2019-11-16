@@ -12,13 +12,14 @@ import paramiko.client
 import paramiko.ssh_exception
 import tornado.options
 
+k = paramiko.RSAKey.from_private_key_file(tornado.options.options.ssh_key_file)
 
 def ssh_connect_with_retries(host, retries=3, timeout=30):
     for i in range(retries):
         try:
             ssh_client = paramiko.client.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.client.WarningPolicy())
-            ssh_client.connect(host, username='ubuntu', timeout=timeout)
+            ssh_client.connect(host, username='ubuntu', timeout=timeout, pkey = k)
             return ssh_client
         except (socket.error, paramiko.ssh_exception.SSHException):
             if i == retries - 1:
@@ -30,6 +31,7 @@ def ssh_connect_with_retries(host, retries=3, timeout=30):
 def ssh_cmd_async(ssh_client, cmd):
     transport = ssh_client.get_transport()
     chan = transport.open_session()
+    print ('>> ', cmd)
     chan.exec_command(cmd)
     return chan
 
@@ -38,16 +40,17 @@ def ssh_cmd(ssh_client, cmd, timeout=2):
     transport = ssh_client.get_transport()
     chan = transport.open_session()
     chan.settimeout(timeout)
+    print ('>> ', cmd)
     chan.exec_command(cmd)
 
     stdout = ''
     stderr = ''
     while True:
         if chan.recv_ready():
-            stdout += chan.recv(4096)
+            stdout += chan.recv(4096).decode('utf8')
             continue
         if chan.recv_stderr_ready():
-            stderr += chan.recv_stderr(4096)
+            stderr += chan.recv_stderr(4096).decode('utf8')
             continue
         if chan.exit_status_ready():
             exit_status = chan.recv_exit_status()
@@ -55,6 +58,8 @@ def ssh_cmd(ssh_client, cmd, timeout=2):
         time.sleep(0.1)
 
     if exit_status != 0:
+        print(stdout)
+        print(stderr)
         raise Exception('%r' % stderr)
 
     return stdout, stderr
@@ -72,24 +77,15 @@ def _bootstrap(addr):
     golang_version = tornado.options.options.golang_version
     ssh_client = ssh_connect_with_retries(addr)
     for cmd in [
-            'wget https://storage.googleapis.com/golang/go%s.linux-amd64.tar.gz' % golang_version,
-            'sudo -S tar -C /usr/local -xzf go%s.linux-amd64.tar.gz' % golang_version,
-            'sudo -S apt-get update',
-            'sudo -S apt-get -y install git mercurial',
+            'wget https://dl.google.com/go/go1.12.13.linux-amd64.tar.gz',
+            'tar -C .local -xzf go1.12.13.linux-amd64.tar.gz',
             'mkdir -p go/src/github.com/nsqio',
             'cd go/src/github.com/nsqio && git clone https://github.com/nsqio/nsq',
-            'cd go/src/github.com/nsqio/nsq && git checkout %s' % commit,
-            'sudo -S curl -s -o /usr/local/bin/gpm \
-                https://raw.githubusercontent.com/pote/gpm/v1.2.3/bin/gpm',
-            'sudo -S chmod +x /usr/local/bin/gpm',
-            'cd go/src/github.com/nsqio/nsq && \
-                GOPATH=/home/ubuntu/go PATH=$PATH:/usr/local/go/bin gpm install',
-            'cd go/src/github.com/nsqio/nsq/apps/nsqd && \
-                GOPATH=/home/ubuntu/go /usr/local/go/bin/go build',
-            'cd go/src/github.com/nsqio/nsq/bench/bench_writer && \
-                GOPATH=/home/ubuntu/go /usr/local/go/bin/go build',
-            'cd go/src/github.com/nsqio/nsq/bench/bench_reader && \
-                GOPATH=/home/ubuntu/go /usr/local/go/bin/go build',
+            'cd go/src/github.com/nsqio/nsq && git checkout v1.2.0',
+            'sudo apt install go-dep',
+            'cd go/src/github.com/nsqio/nsq/apps/nsqd && dep ensure && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
+            'cd go/src/github.com/nsqio/nsq/bench/bench_writer && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
+            'cd go/src/github.com/nsqio/nsq/bench/bench_reader && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
             'sudo -S mkdir -p /mnt/nsq',
             'sudo -S chmod 777 /mnt/nsq']:
         ssh_cmd(ssh_client, cmd, timeout=10)
@@ -106,7 +102,8 @@ def bootstrap():
         max_count=total_count,
         key_name=tornado.options.options.ssh_key_name,
         instance_type=tornado.options.options.instance_type,
-        security_groups=['default'])
+        security_group_ids=[tornado.options.options.security_group_id],
+        subnet_id=tornado.options.options.subnet_id)
 
     logging.info('waiting for instances to launch...')
 
@@ -121,7 +118,7 @@ def bootstrap():
         if not instance.tags:
             conn.create_tags([instance.id], {'nsq_bench': '1'})
 
-    hosts = [(i.id, i.public_dns_name) for i in run.instances]
+    hosts = [(i.id, i.private_dns_name) for i in run.instances]
 
     try:
         c = 0
@@ -263,7 +260,7 @@ def _find_hosts():
         if not instance.tags or instance.state != 'running':
             continue
         if 'nsq_bench' in instance.tags:
-            hosts.append((instance.id, instance.public_dns_name))
+            hosts.append((instance.id, instance.private_dns_name))
 
     return hosts
 
@@ -303,6 +300,10 @@ if __name__ == '__main__':
                            help='the git commit')
     tornado.options.define('golang_version', type=str, default='1.5.1',
                            help='the go version')
+    tornado.options.define('ssh_key_file', type=str, help="File name of ssh private key to ssh into the test machines")
+    tornado.options.define('security_group_id', type=str, help="Security group id to assign teh test machines")
+    tornado.options.define('subnet_id', type=str, help="Subnet id to launch the machines into")
+
     tornado.options.parse_command_line()
 
     logging.getLogger('paramiko').setLevel(logging.WARNING)
