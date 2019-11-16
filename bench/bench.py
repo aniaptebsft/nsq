@@ -167,7 +167,7 @@ def run():
     producer_hosts = hosts[tornado.options.options.nsqd_count:]
     for id, addr in producer_hosts:
         for nsqd_tcp_addr in nsqd_tcp_addrs:
-            topic = hashlib.md5(addr).hexdigest()
+            topic = hashlib.md5(addr.encode('utf8')).hexdigest()
             try:
                 ssh_client = ssh_connect_with_retries(addr)
                 for cmd in [
@@ -188,7 +188,7 @@ def run():
         consumer_hosts = hosts[tornado.options.options.nsqd_count:]
         for id, addr in consumer_hosts:
             for nsqd_tcp_addr in nsqd_tcp_addrs:
-                topic = hashlib.md5(addr).hexdigest()
+                topic = hashlib.md5(addr.encode('utf8')).hexdigest()
                 try:
                     ssh_client = ssh_connect_with_retries(addr)
                     for cmd in [
@@ -221,7 +221,7 @@ def run():
                 sys.stdout.flush()
                 continue
             if chan.recv_stderr_ready():
-                line = chan.recv_stderr(4096)
+                line = chan.recv_stderr(4096).decode('utf8')
                 if 'duration:' in line:
                     kind = line.split(' ')[0][1:-1]
                     parts = line.rsplit('duration:')[1].split('-')
