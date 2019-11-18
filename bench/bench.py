@@ -35,50 +35,22 @@ def ssh_cmd_async(ssh_client, cmd):
     chan.exec_command(cmd)
     return chan
 
-def read_chan(chan):
-    print ('Reading chan')
-    stdout = ''
-    stderr = ''
-    while True:
-        if chan.recv_ready():
-            ret = chan.recv(4096).decode('utf8')
-            if ret:
-                print ('<< ', ret)
-                stdout += ret
-            continue
-        if chan.recv_stderr_ready():
-            ret = chan.recv(4096).decode('utf8')
-            if ret:
-                print ('<< ', ret)
-                stderr += ret
-            continue
-        if chan.exit_status_ready():
-            exit_status = chan.recv_exit_status()
-            break
-        time.sleep(0.1)
-
-    if exit_status != 0:
-        raise Exception('%r' % stderr)
 
 def ssh_cmd(ssh_client, cmd, timeout=2):
     transport = ssh_client.get_transport()
     chan = transport.open_session()
     chan.settimeout(timeout)
-    print ('>> ', cmd)
+    print('>> ', cmd)
     chan.exec_command(cmd)
 
     stdout = ''
     stderr = ''
     while True:
         if chan.recv_ready():
-            ret = chan.recv(4096).decode('utf8')
-            print ('<< ', ret)
-            stdout += ret
+            stdout += chan.recv(4096).decode('utf8')
             continue
         if chan.recv_stderr_ready():
-            ret = chan.recv(4096).decode('utf8')
-            print ('<< ', ret)
-            stderr += ret
+            stderr += chan.recv_stderr(4096).decode('utf8')
             continue
         if chan.exit_status_ready():
             exit_status = chan.recv_exit_status()
@@ -89,7 +61,6 @@ def ssh_cmd(ssh_client, cmd, timeout=2):
         raise Exception('%r' % stderr)
 
     return stdout, stderr
-
 
 def connect_to_ec2():
     return boto.ec2.connect_to_region(
@@ -103,7 +74,7 @@ def _bootstrap(addr):
     golang_version = tornado.options.options.golang_version
     ssh_client = ssh_connect_with_retries(addr)
     for cmd in [
-            'sudo apt-get -y update',
+            #'sudo apt-get -y update',
             'wget https://dl.google.com/go/go1.12.13.linux-amd64.tar.gz',
             'mkdir .local',
             'tar -C .local -xzf go1.12.13.linux-amd64.tar.gz',
@@ -117,7 +88,7 @@ def _bootstrap(addr):
             'cd go/src/github.com/nsqio/nsq/bench/bench_reader && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
             'sudo -S mkdir -p /mnt/nsq',
             'sudo -S chmod 777 /mnt/nsq']:
-        ssh_cmd(ssh_client, cmd, timeout=30)
+        ssh_cmd(ssh_client, cmd, timeout=10)
 
 
 def bootstrap():
@@ -170,7 +141,7 @@ def run():
     for id, addr in nsqd_hosts:
         try:
             logging.info('start nsqd with below command on host: %s', addr)
-            logging.info('GOMAXPROCS=32 ./go/src/github.com/nsqio/nsq/apps/nsqd/nsqd --data-path=/mnt/nsq --mem-queue-size=10000000 --max-rdy-count=%s' % (tornado.options.options.rdy))
+            logging.info('GOMAXPROCS=32 ./go/src/github.com/nsqio/nsq/apps/nsqd/nsqd --data-path=/mnt/nsq --mem-queue-size=10000 --max-rdy-count=%s' % (tornado.options.options.rdy))
             # ssh_client = ssh_connect_with_retries(addr)
             # for cmd in [
             #         'sudo -S pkill -f nsqd',
@@ -328,7 +299,7 @@ if __name__ == '__main__':
                            help='EC2 instance type')
     tornado.options.define('msg_size', type=int, default=200,
                            help='size of message')
-    tornado.options.define('rdy', type=int, default=10000,
+    tornado.options.define('rdy', type=int, default=2500,
                            help='RDY count to use for bench_reader')
     tornado.options.define('mode', type=str, default='pubsub',
                            help='the benchmark mode (pub, pubsub)')
