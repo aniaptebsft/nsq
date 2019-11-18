@@ -142,6 +142,7 @@ def run():
     nsqd_hosts = hosts[:tornado.options.options.nsqd_count]
     for id, addr in nsqd_hosts:
         try:
+            logging.info(addr)
             ssh_client = ssh_connect_with_retries(addr)
             for cmd in [
                     'sudo -S pkill -f nsqd',
@@ -172,6 +173,7 @@ def run():
         for nsqd_tcp_addr in nsqd_tcp_addrs:
             topic = hashlib.md5(addr.encode('utf8')).hexdigest()
             try:
+                logging.info(addr)
                 ssh_client = ssh_connect_with_retries(addr)
                 for cmd in [
                         'GOMAXPROCS=2 \
@@ -193,6 +195,7 @@ def run():
             for nsqd_tcp_addr in nsqd_tcp_addrs:
                 topic = hashlib.md5(addr.encode('utf8')).hexdigest()
                 try:
+                    logging.info(addr)
                     ssh_client = ssh_connect_with_retries(addr)
                     for cmd in [
                             'GOMAXPROCS=8 \
