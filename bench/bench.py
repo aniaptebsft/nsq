@@ -185,6 +185,8 @@ def run():
             except Exception:
                 logging.exception('failed')
 
+    time.sleep(30)
+
     if tornado.options.options.mode == 'pubsub':
         logging.info('launching %d consumer(s) on %d host(s)',
                      tornado.options.options.nsqd_count * tornado.options.options.worker_count,
