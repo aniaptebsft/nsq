@@ -177,7 +177,7 @@ def run():
                 for cmd in [
                         'GOMAXPROCS=2 \
                             ./go/src/github.com/nsqio/nsq/bench/bench_writer/bench_writer \
-                            --topic=%s --nsqd-tcp-address=%s:4150 --deadline=\'%s\' --size=%d' % (
+                            --topic=%s --nsqd-tcp-address=%s:4150 --deadline=\'%s\' --size=%d --batch-size=1' % (
                             topic, nsqd_tcp_addr, deadline.strftime('%Y-%m-%d %H:%M:%S'),
                             tornado.options.options.msg_size)]:
                     worker_chans.append((ssh_client, ssh_cmd_async(ssh_client, cmd)))
