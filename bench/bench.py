@@ -6,6 +6,7 @@ import datetime
 import socket
 import warnings
 import hashlib
+import threading
 
 import boto.ec2
 import paramiko.client
@@ -34,6 +35,30 @@ def ssh_cmd_async(ssh_client, cmd):
     chan.exec_command(cmd)
     return chan
 
+def read_chan(chan):
+    print ('Reading chan')
+    stdout = ''
+    stderr = ''
+    while True:
+        if chan.recv_ready():
+            ret = chan.recv(4096).decode('utf8')
+            if ret:
+                print ('<< ', ret)
+                stdout += ret
+            continue
+        if chan.recv_stderr_ready():
+            ret = chan.recv(4096).decode('utf8')
+            if ret:
+                print ('<< ', ret)
+                stderr += ret
+            continue
+        if chan.exit_status_ready():
+            exit_status = chan.recv_exit_status()
+            break
+        time.sleep(0.1)
+
+    if exit_status != 0:
+        raise Exception('%r' % stderr)
 
 def ssh_cmd(ssh_client, cmd, timeout=2):
     transport = ssh_client.get_transport()
@@ -46,10 +71,14 @@ def ssh_cmd(ssh_client, cmd, timeout=2):
     stderr = ''
     while True:
         if chan.recv_ready():
-            stdout += chan.recv(4096).decode('utf8')
+            ret = chan.recv(4096).decode('utf8')
+            print ('<< ', ret)
+            stdout += ret
             continue
         if chan.recv_stderr_ready():
-            stderr += chan.recv_stderr(4096).decode('utf8')
+            ret = chan.recv(4096).decode('utf8')
+            print ('<< ', ret)
+            stderr += ret
             continue
         if chan.exit_status_ready():
             exit_status = chan.recv_exit_status()
@@ -57,8 +86,6 @@ def ssh_cmd(ssh_client, cmd, timeout=2):
         time.sleep(0.1)
 
     if exit_status != 0:
-        print(stdout)
-        print(stderr)
         raise Exception('%r' % stderr)
 
     return stdout, stderr
@@ -90,7 +117,7 @@ def _bootstrap(addr):
             'cd go/src/github.com/nsqio/nsq/bench/bench_reader && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
             'sudo -S mkdir -p /mnt/nsq',
             'sudo -S chmod 777 /mnt/nsq']:
-        ssh_cmd(ssh_client, cmd, timeout=10)
+        ssh_cmd(ssh_client, cmd, timeout=30)
 
 
 def bootstrap():
@@ -142,16 +169,19 @@ def run():
     nsqd_hosts = hosts[:tornado.options.options.nsqd_count]
     for id, addr in nsqd_hosts:
         try:
-            logging.info(addr)
-            ssh_client = ssh_connect_with_retries(addr)
-            for cmd in [
-                    'sudo -S pkill -f nsqd',
-                    'sudo -S rm -f /mnt/nsq/*.dat',
-                    'GOMAXPROCS=32 ./go/src/github.com/nsqio/nsq/apps/nsqd/nsqd \
-                        --data-path=/mnt/nsq --mem-queue-size=10000000 --max-rdy-count=%s' % (
-                        tornado.options.options.rdy
-                        )]:
-                nsqd_chans.append((ssh_client, ssh_cmd_async(ssh_client, cmd)))
+            logging.info('start nsqd with below command on host: %s', addr)
+            logging.info('GOMAXPROCS=32 ./go/src/github.com/nsqio/nsq/apps/nsqd/nsqd --data-path=/mnt/nsq --mem-queue-size=10000000 --max-rdy-count=%s' % (tornado.options.options.rdy))
+            # ssh_client = ssh_connect_with_retries(addr)
+            # for cmd in [
+            #         'sudo -S pkill -f nsqd',
+            #         'sudo -S rm -f /mnt/nsq/*.dat',
+            #         'GOMAXPROCS=32 ./go/src/github.com/nsqio/nsq/apps/nsqd/nsqd \
+            #             --data-path=/mnt/nsq --mem-queue-size=10000000 --max-rdy-count=%s' % (
+            #             tornado.options.options.rdy
+            #             )]:
+            #     chan = ssh_cmd_async(ssh_client, cmd)
+            #     t = threading.Thread(target=read_chan, args=(chan,)); t.start()
+            #     nsqd_chans.append((ssh_client, chan))
         except Exception:
             logging.exception('failed')
 
@@ -159,8 +189,6 @@ def run():
 
     dt = datetime.datetime.utcnow()
     deadline = dt + datetime.timedelta(seconds=30)
-
-    time.sleep(30)
 
     logging.info('launching %d producer(s) on %d host(s)',
                  tornado.options.options.nsqd_count * tornado.options.options.worker_count,
@@ -185,7 +213,6 @@ def run():
             except Exception:
                 logging.exception('failed')
 
-    time.sleep(30)
 
     if tornado.options.options.mode == 'pubsub':
         logging.info('launching %d consumer(s) on %d host(s)',
@@ -255,8 +282,8 @@ def run():
                      kind, max_duration, total_mb, total_ops,
                      max_duration / total_ops * 1000 * 1000)
 
-    for ssh_client, chan in nsqd_chans:
-        chan.close()
+    # for ssh_client, chan in nsqd_chans:
+    #     chan.close()
 
 
 def _find_hosts():
