@@ -159,6 +159,8 @@ def run():
     dt = datetime.datetime.utcnow()
     deadline = dt + datetime.timedelta(seconds=30)
 
+    time.sleep(30)
+
     logging.info('launching %d producer(s) on %d host(s)',
                  tornado.options.options.nsqd_count * tornado.options.options.worker_count,
                  tornado.options.options.worker_count)
