@@ -76,16 +76,15 @@ def _bootstrap(addr):
     golang_version = tornado.options.options.golang_version
     ssh_client = ssh_connect_with_retries(addr)
     for cmd in [
-            'sudo add-apt-repository main',
-            'sudo add-apt-repository universe',
             'sudo apt-get -y update',
             'wget https://dl.google.com/go/go1.12.13.linux-amd64.tar.gz',
             'mkdir .local',
             'tar -C .local -xzf go1.12.13.linux-amd64.tar.gz',
+            'wget http://mirrors.kernel.org/ubuntu/pool/universe/g/go-dep/go-dep_0.3.2-2_amd64.deb',
+            'sudo dpkg -i go-dep_0.3.2-2_amd64.deb',
             'mkdir -p go/src/github.com/nsqio',
             'cd go/src/github.com/nsqio && git clone https://github.com/nsqio/nsq',
             'cd go/src/github.com/nsqio/nsq && git checkout v1.2.0',
-            'sudo apt-get -y install go-dep',
             'cd go/src/github.com/nsqio/nsq/apps/nsqd && dep ensure && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
             'cd go/src/github.com/nsqio/nsq/bench/bench_writer && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
             'cd go/src/github.com/nsqio/nsq/bench/bench_reader && GOPATH=/home/ubuntu/go /home/ubuntu/.local/go/bin/go build',
