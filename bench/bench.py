@@ -76,8 +76,8 @@ def _bootstrap(addr):
     golang_version = tornado.options.options.golang_version
     ssh_client = ssh_connect_with_retries(addr)
     for cmd in [
-            'sudo apt update',
-            'sudo apt install go-dep',
+            'sudo apt-get update',
+            'sudo apt-get install go-dep',
             'wget https://dl.google.com/go/go1.12.13.linux-amd64.tar.gz',
             'mkdir .local',
             'tar -C .local -xzf go1.12.13.linux-amd64.tar.gz',
